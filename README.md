@@ -69,7 +69,7 @@ This mod is open-source and licensed under **MIT License**. Feel free to modify 
 
 ## 👏 Credits
 
-- **Developer:** [Jake404NotFound]
+- **Developer:** [Jake404NotFound & Manus]
 - **Special Thanks:** Manus.
 
 ---
