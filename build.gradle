@@ -14,25 +14,44 @@ archivesBaseName = 'architecturalrealism'
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 println "Java: ${System.getProperty('java.version')}, JVM: ${System.getProperty('java.vm.version')} (${System.getProperty('java.vendor')}), Arch: ${System.getProperty('os.arch')}"
-minecraft {
-    // The mappings can be changed at any time and must be in the following format.
-    // Channel:   Version:
-    // official   MCVersion             Official field/method names from Mojang mapping files
-    // parchment  YYYY.MM.DD-MCVersion  Open community-sourced parameter names and javadocs layered on top of official
-    //
-    // You must be aware of the Mojang license when using the 'official' or 'parchment' mappings.
-    // See more information here: https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
-    //
-    // Parchment is an unofficial project maintained by ParchmentMC, separate from NeoForged
-    // Additional setup is needed to use their mappings: https://parchmentmc.org/docs/getting-started
-    mappings channel: 'official', version: '1.21.1'
 
-    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-
-    // Default run configurations.
-    // These can be tweaked, removed, or duplicated as needed.
+neoForge {
+    // Specify the version of NeoForge to use
+    version = project.neo_version
+    
+    // Parchment mappings for better parameter names
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+    
+    // Default run configurations
     runs {
-        // applies to all the run configs below
+        client {
+            client()
+            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
+        }
+        
+        server {
+            server()
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
+            programArgument '--nogui'
+        }
+        
+        // This run config launches GameTestServer and runs all registered gametests, then exits.
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
+        }
+        
+        data {
+            data()
+            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+            programArguments.addAll '--mod', 'architecturalrealism', '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+        
+        // applies to all the run configs above
         configureEach {
             workingDirectory project.file('run')
             // Recommended logging data for a userdev environment
@@ -40,36 +59,18 @@ minecraft {
             // "SCAN": For mods scan.
             // "REGISTRIES": For firing of registry events.
             // "REGISTRYDUMP": For getting the contents of all registries.
-            property 'forge.logging.markers', 'REGISTRIES'
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
             // Recommended logging level for the console
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
-            property 'forge.logging.console.level', 'debug'
-            mods {
-                architecturalrealism {
-                    source sourceSets.main
-                }
-            }
+            systemProperty 'forge.logging.console.level', 'debug'
         }
-        client {
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            property 'forge.enabledGameTestNamespaces', 'architecturalrealism'
-        }
-        server {
-            property 'forge.enabledGameTestNamespaces', 'architecturalrealism'
-            args '--nogui'
-        }
-        // This run config launches GameTestServer and runs all registered gametests, then exits.
-        // By default, the server will crash when no gametests are provided.
-        // The gametest system is also enabled by default for other run configs under the /test command.
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', 'architecturalrealism'
-        }
-        data {
-            // example of overriding the workingDirectory set in configureEach above
-            workingDirectory project.file('run-data')
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', 'architecturalrealism', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+    }
+    
+    // Define mod <-> source bindings
+    mods {
+        architecturalrealism {
+            sourceSet sourceSets.main
         }
     }
 }
@@ -89,27 +90,11 @@ repositories {
 }
 
 dependencies {
-    // Specify the version of Minecraft to use.
-    // Any artifact can be supplied so long as it has a "jar" artifact.
-    // The "client" and "server" here are legacy names and do not represent the side.
-    minecraft 'net.neoforged:forge:1.21.1-47.1.0'
-    
-    // Example mod dependency with JEI
-    // implementation fg.deobf('mezz.jei:jei-1.21.1-forge:17.0.0.30')
-    
-    // For more info:
-    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
-    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+    // No need to specify Minecraft dependency here, it's handled by the plugin
 }
 
 // This block of code adds the ability to generate a mod_data.json file in the META-INF folder of the mod jar.
 // This file is used by the NeoForged installer to determine the mod's ID, version, name, and description.
-// It also adds the ability to generate a mods.toml file in the META-INF folder of the mod jar.
-// This file is used by NeoForged to determine the mod's ID, version, name, description, and dependencies.
-// The mods.toml file is the primary way to declare metadata for your mod, and it is required.
-// The mod_data.json file is used by the installer, and it is optional.
-// You can customize the mods.toml file by editing the file directly, or by extending the task with your own configuration.
-// You can learn more about the mods.toml file here: https://neoforged.net/docs/1.21.1/gettingstarted/modfiles/
 tasks.named('jar', Jar).configure {
     finalizedBy 'reobfJar'
 }
