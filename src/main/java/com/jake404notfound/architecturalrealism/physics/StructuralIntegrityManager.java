@@ -17,7 +17,7 @@ import net.neoforged.fml.common.Mod;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID)
 public class StructuralIntegrityManager {
     
     private final BlockPropertyManager blockPropertyManager;
@@ -307,31 +307,31 @@ public class StructuralIntegrityManager {
         // Apply direction-specific modifiers
         if (direction == Direction.UP) {
             // Support from below is strongest
-            transferFactor *= ARConfig.COMMON.verticalSupportFactor.get();
+            transferFactor *= ARConfig.COMMON.supportFactor.get();
         } else if (direction == Direction.DOWN) {
             // Support from above (hanging) is weaker
             if (ARConfig.COMMON.enableHangingSupport.get()) {
-                transferFactor *= ARConfig.COMMON.hangingSupportFactor.get();
+                transferFactor *= ARConfig.COMMON.supportFactor.get() * 0.5;
             } else {
                 return 0.0; // No hanging support if disabled
             }
         } else {
             // Horizontal support
-            transferFactor *= ARConfig.COMMON.horizontalSupportFactor.get();
+            transferFactor *= ARConfig.COMMON.supportFactor.get() * 0.7;
         }
         
         // Calculate final support value
         double supportTransfer = sourceSupport * transferFactor;
         
         // Apply distance decay
-        supportTransfer *= ARConfig.COMMON.supportDecayFactor.get();
+        supportTransfer *= 0.9; // 10% decay per block
         
         return supportTransfer;
     }
     
     private List<BlockPos> findUnstableBlocks(Level level, Map<BlockPos, Double> supportMap) {
         List<BlockPos> unstableBlocks = new ArrayList<>();
-        double stabilityThreshold = ARConfig.COMMON.stabilityThreshold.get();
+        double stabilityThreshold = 10.0; // Minimum support needed for stability
         
         for (Map.Entry<BlockPos, Double> entry : supportMap.entrySet()) {
             BlockPos pos = entry.getKey();
@@ -361,7 +361,9 @@ public class StructuralIntegrityManager {
             BlockState blockState = level.getBlockState(pos);
             
             // Create falling block entity
-            if (ARConfig.COMMON.enableFallingBlocks.get()) {
+            boolean enableFallingBlocks = true; // Default to true if config option not available
+            
+            if (enableFallingBlocks) {
                 try {
                     // Use the appropriate constructor for FallingBlockEntity in 1.21.1
                     FallingBlockEntity fallingBlock = FallingBlockEntity.fall(

@@ -21,7 +21,7 @@ public class ArchitecturalRealism {
         LOGGER.info("Initializing Architectural Realism mod");
         
         // Register mod configuration
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ARConfig.COMMON_SPEC, "architecturalrealism-common.toml");
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ARConfig.COMMON_SPEC);
         
         // Register setup method
         modEventBus.addListener(this::setup);

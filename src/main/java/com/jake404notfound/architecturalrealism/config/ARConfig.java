@@ -17,13 +17,19 @@ public class ARConfig {
         public final ModConfigSpec.BooleanValue enableCreativeBypass;
         public final ModConfigSpec.EnumValue<PhysicsMode> physicsMode;
         
-        // New configuration options
+        // Physics configuration options
         public final ModConfigSpec.IntValue foundationDepth;
         public final ModConfigSpec.BooleanValue enableHangingSupport;
         public final ModConfigSpec.DoubleValue supportFactor;
+        public final ModConfigSpec.DoubleValue verticalSupportFactor;
+        public final ModConfigSpec.DoubleValue horizontalSupportFactor;
+        public final ModConfigSpec.DoubleValue hangingSupportFactor;
+        public final ModConfigSpec.DoubleValue supportDecayFactor;
+        public final ModConfigSpec.DoubleValue stabilityThreshold;
         public final ModConfigSpec.IntValue supportCacheSize;
         public final ModConfigSpec.BooleanValue enableDiagonalConnections;
         public final ModConfigSpec.DoubleValue diagonalSupportFactor;
+        public final ModConfigSpec.BooleanValue enableFallingBlocks;
 
         public Common(ModConfigSpec.Builder builder) {
             builder.comment("Architectural Realism Configuration")
@@ -52,8 +58,28 @@ public class ARConfig {
                     .define("enableHangingSupport", true);
                     
             supportFactor = builder
-                    .comment("Multiplier for required support based on block weight (higher values require more support)")
+                    .comment("Base multiplier for support calculations")
                     .defineInRange("supportFactor", 1.5, 0.5, 5.0);
+                    
+            verticalSupportFactor = builder
+                    .comment("Support factor for blocks supporting from below (higher values provide more support)")
+                    .defineInRange("verticalSupportFactor", 1.0, 0.1, 2.0);
+                    
+            horizontalSupportFactor = builder
+                    .comment("Support factor for blocks supporting from the sides (higher values provide more support)")
+                    .defineInRange("horizontalSupportFactor", 0.7, 0.1, 1.0);
+                    
+            hangingSupportFactor = builder
+                    .comment("Support factor for blocks supporting from above (higher values provide more support)")
+                    .defineInRange("hangingSupportFactor", 0.5, 0.1, 1.0);
+                    
+            supportDecayFactor = builder
+                    .comment("How much support decays with distance (lower values mean faster decay)")
+                    .defineInRange("supportDecayFactor", 0.9, 0.5, 0.99);
+                    
+            stabilityThreshold = builder
+                    .comment("Minimum support value required for a block to be stable")
+                    .defineInRange("stabilityThreshold", 10.0, 1.0, 50.0);
                     
             enableDiagonalConnections = builder
                     .comment("Enable support propagation through diagonal connections")
@@ -62,6 +88,10 @@ public class ARConfig {
             diagonalSupportFactor = builder
                     .comment("Support factor for diagonal connections (lower values mean less support through diagonals)")
                     .defineInRange("diagonalSupportFactor", 0.7, 0.1, 1.0);
+                    
+            enableFallingBlocks = builder
+                    .comment("Enable falling block entities for unstable blocks (if false, blocks are just destroyed)")
+                    .define("enableFallingBlocks", true);
 
             builder.pop().push("performance");
 
