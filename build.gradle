@@ -53,7 +53,7 @@ neoForge {
         
         // applies to all the run configs above
         configureEach {
-            workingDirectory project.file('run')
+            gameDirectory project.file('run')
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
             // "SCAN": For mods scan.
