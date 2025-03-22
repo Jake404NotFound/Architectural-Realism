@@ -16,6 +16,14 @@ public class ARConfig {
         public final ModConfigSpec.BooleanValue enableVisualFeedback;
         public final ModConfigSpec.BooleanValue enableCreativeBypass;
         public final ModConfigSpec.EnumValue<PhysicsMode> physicsMode;
+        
+        // New configuration options
+        public final ModConfigSpec.IntValue foundationDepth;
+        public final ModConfigSpec.BooleanValue enableHangingSupport;
+        public final ModConfigSpec.DoubleValue supportFactor;
+        public final ModConfigSpec.IntValue supportCacheSize;
+        public final ModConfigSpec.BooleanValue enableDiagonalConnections;
+        public final ModConfigSpec.DoubleValue diagonalSupportFactor;
 
         public Common(ModConfigSpec.Builder builder) {
             builder.comment("Architectural Realism Configuration")
@@ -33,6 +41,28 @@ public class ARConfig {
                     .comment("Bypass structural integrity checks in creative mode")
                     .define("enableCreativeBypass", true);
 
+            builder.pop().push("physics");
+            
+            foundationDepth = builder
+                    .comment("How many solid blocks beneath a block are required to consider it a foundation")
+                    .defineInRange("foundationDepth", 3, 1, 10);
+                    
+            enableHangingSupport = builder
+                    .comment("Enable support for hanging structures (blocks can hang from above)")
+                    .define("enableHangingSupport", true);
+                    
+            supportFactor = builder
+                    .comment("Multiplier for required support based on block weight (higher values require more support)")
+                    .defineInRange("supportFactor", 1.5, 0.5, 5.0);
+                    
+            enableDiagonalConnections = builder
+                    .comment("Enable support propagation through diagonal connections")
+                    .define("enableDiagonalConnections", true);
+                    
+            diagonalSupportFactor = builder
+                    .comment("Support factor for diagonal connections (lower values mean less support through diagonals)")
+                    .defineInRange("diagonalSupportFactor", 0.7, 0.1, 1.0);
+
             builder.pop().push("performance");
 
             maxSupportDistance = builder
@@ -46,6 +76,10 @@ public class ARConfig {
             maxCalculationsPerTick = builder
                     .comment("Maximum number of block calculations per tick (higher values may impact performance)")
                     .defineInRange("maxCalculationsPerTick", 1000, 100, 10000);
+                    
+            supportCacheSize = builder
+                    .comment("Maximum number of block positions to cache support values for (per dimension)")
+                    .defineInRange("supportCacheSize", 5000, 1000, 50000);
 
             builder.pop().push("visual");
 

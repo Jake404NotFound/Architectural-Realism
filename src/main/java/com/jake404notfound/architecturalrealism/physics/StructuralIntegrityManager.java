@@ -19,16 +19,20 @@ public class StructuralIntegrityManager {
     private final BlockPropertyManager blockPropertyManager;
     private final Queue<StructuralUpdateTask> updateQueue;
     private final Map<Level, Set<BlockPos>> processedBlocks;
+    private final Map<Level, Map<BlockPos, Double>> supportCache;
+    private int maxCacheSize;
     
     public StructuralIntegrityManager() {
         this.blockPropertyManager = new BlockPropertyManager();
         this.updateQueue = new ConcurrentLinkedQueue<>();
         this.processedBlocks = new HashMap<>();
+        this.supportCache = new HashMap<>();
     }
     
     public void initialize() {
         ArchitecturalRealism.LOGGER.info("Initializing Structural Integrity Manager");
         blockPropertyManager.loadBlockProperties();
+        maxCacheSize = ARConfig.COMMON.supportCacheSize.get();
     }
     
     @SubscribeEvent
@@ -67,6 +71,11 @@ public class StructuralIntegrityManager {
     
     private void scheduleStructuralUpdate(Level level, BlockPos pos, int radius) {
         updateQueue.add(new StructuralUpdateTask(level, pos, radius));
+        
+        // Clear support cache for this level when a block changes
+        if (supportCache.containsKey(level)) {
+            supportCache.get(level).clear();
+        }
     }
     
     // This would be called every tick to process the update queue
@@ -142,7 +151,7 @@ public class StructuralIntegrityManager {
     private boolean hasGroundSupport(Level level, BlockPos pos) {
         // Check if there are solid blocks beneath this position down to bedrock or for a significant depth
         int depth = 0;
-        int maxDepth = 3; // How deep to check for solid ground
+        int maxDepth = ARConfig.COMMON.foundationDepth.get(); // Configurable depth for ground support
         
         BlockPos checkPos = pos.below();
         while (depth < maxDepth && checkPos.getY() >= level.getMinBuildHeight()) {
@@ -178,7 +187,13 @@ public class StructuralIntegrityManager {
             } else if (foundations.contains(pos)) {
                 supportMap.put(pos.immutable(), 100.0); // Maximum support for foundations
             } else {
-                supportMap.put(pos.immutable(), 0.0);
+                // Check if we have a cached support value
+                Double cachedSupport = getCachedSupport(level, pos);
+                if (cachedSupport != null) {
+                    supportMap.put(pos.immutable(), cachedSupport);
+                } else {
+                    supportMap.put(pos.immutable(), 0.0);
+                }
             }
         });
         
@@ -186,12 +201,21 @@ public class StructuralIntegrityManager {
         Queue<BlockPos> queue = new LinkedList<>(foundations);
         Set<BlockPos> processed = new HashSet<>(foundations);
         
+        int maxSupportDistance = ARConfig.COMMON.maxSupportDistance.get();
+        Map<BlockPos, Integer> distanceFromFoundation = new HashMap<>();
+        
+        // Initialize distances for foundations
+        for (BlockPos foundation : foundations) {
+            distanceFromFoundation.put(foundation, 0);
+        }
+        
         while (!queue.isEmpty()) {
             BlockPos current = queue.poll();
             double currentSupport = supportMap.get(current);
+            int currentDistance = distanceFromFoundation.getOrDefault(current, 0);
             
-            // Skip if no support to propagate
-            if (currentSupport <= 0) continue;
+            // Skip if no support to propagate or we've reached max distance
+            if (currentSupport <= 0 || currentDistance >= maxSupportDistance) continue;
             
             // Check all six adjacent blocks
             for (Direction direction : Direction.values()) {
@@ -211,16 +235,100 @@ public class StructuralIntegrityManager {
                     // Update support value
                     supportMap.put(neighbor.immutable(), transferredSupport);
                     
+                    // Cache the support value
+                    cacheSupport(level, neighbor.immutable(), transferredSupport);
+                    
                     // Add to queue for further propagation if not already processed
                     if (!processed.contains(neighbor)) {
                         queue.add(neighbor.immutable());
                         processed.add(neighbor.immutable());
+                        distanceFromFoundation.put(neighbor, currentDistance + 1);
                     }
                 }
+            }
+            
+            // Check diagonal connections if enabled
+            if (ARConfig.COMMON.enableDiagonalConnections.get()) {
+                checkDiagonalConnections(level, current, currentSupport, currentDistance, 
+                                        center, radius, supportMap, queue, processed, 
+                                        distanceFromFoundation, maxSupportDistance);
             }
         }
         
         return supportMap;
+    }
+    
+    private void checkDiagonalConnections(Level level, BlockPos current, double currentSupport, 
+                                         int currentDistance, BlockPos center, int radius,
+                                         Map<BlockPos, Double> supportMap, Queue<BlockPos> queue, 
+                                         Set<BlockPos> processed, Map<BlockPos, Integer> distanceFromFoundation,
+                                         int maxSupportDistance) {
+        // Check diagonal connections (e.g., corner blocks)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    // Skip orthogonal directions (already handled) and center
+                    if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <= 1) continue;
+                    
+                    BlockPos diagonal = current.offset(dx, dy, dz);
+                    
+                    // Skip if outside calculation radius
+                    if (diagonal.distSqr(center) > radius * radius) continue;
+                    
+                    // Skip if air
+                    if (level.isEmptyBlock(diagonal)) continue;
+                    
+                    // Calculate diagonal support transfer with penalty
+                    double diagonalFactor = ARConfig.COMMON.diagonalSupportFactor.get();
+                    double transferredSupport = calculateDiagonalSupportTransfer(level, current, diagonal, 
+                                                                               currentSupport, diagonalFactor);
+                    
+                    // If this provides more support than the diagonal already has
+                    if (transferredSupport > supportMap.getOrDefault(diagonal, 0.0)) {
+                        // Update support value
+                        supportMap.put(diagonal.immutable(), transferredSupport);
+                        
+                        // Cache the support value
+                        cacheSupport(level, diagonal.immutable(), transferredSupport);
+                        
+                        // Add to queue for further propagation if not already processed and within distance limit
+                        if (!processed.contains(diagonal) && currentDistance + 1 < maxSupportDistance) {
+                            queue.add(diagonal.immutable());
+                            processed.add(diagonal.immutable());
+                            distanceFromFoundation.put(diagonal, currentDistance + 1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private double calculateDiagonalSupportTransfer(Level level, BlockPos source, BlockPos target, 
+                                                  double sourceSupport, double diagonalFactor) {
+        BlockState sourceState = level.getBlockState(source);
+        BlockState targetState = level.getBlockState(target);
+        
+        // Get block properties
+        BlockProperties sourceProps = blockPropertyManager.getBlockProperties(sourceState.getBlock());
+        BlockProperties targetProps = blockPropertyManager.getBlockProperties(targetState.getBlock());
+        
+        // For diagonal connections, use the minimum of tensile and shear strength
+        double transferFactor = Math.min(sourceProps.getTensileStrength(), sourceProps.getShearStrength()) / 100.0;
+        
+        // Apply diagonal penalty
+        transferFactor *= diagonalFactor;
+        
+        // Higher weight penalty for diagonal connections
+        double supportLoss = sourceProps.getWeight() * 1.5;
+        
+        // Calculate transferred support
+        double transferredSupport = sourceSupport * transferFactor - supportLoss;
+        
+        // Ensure support doesn't exceed the maximum the block can transfer
+        transferredSupport = Math.min(transferredSupport, sourceProps.getMaxLoad() * diagonalFactor);
+        
+        // Support can't be negative
+        return Math.max(0, transferredSupport);
     }
     
     private double calculateSupportTransfer(Level level, BlockPos source, BlockPos target, double sourceSupport, Direction direction) {
@@ -241,6 +349,12 @@ public class StructuralIntegrityManager {
             supportLoss = sourceProps.getWeight() * 0.5;
         } else if (direction == Direction.DOWN) {
             // Support doesn't propagate downward in the same way
+            // But we can allow some minimal support for hanging structures
+            if (ARConfig.COMMON.enableHangingSupport.get()) {
+                transferFactor = sourceProps.getTensileStrength() / 200.0; // Half of normal tensile strength
+                supportLoss = sourceProps.getWeight() * 2.0; // Double weight penalty
+                return Math.max(0, sourceSupport * transferFactor - supportLoss);
+            }
             return 0;
         } else {
             // Horizontal support uses tensile strength
@@ -272,7 +386,7 @@ public class StructuralIntegrityManager {
             BlockProperties props = blockPropertyManager.getBlockProperties(state.getBlock());
             
             // Calculate required support based on block weight
-            double requiredSupport = props.getWeight() * 1.5; // Support factor
+            double requiredSupport = props.getWeight() * ARConfig.COMMON.supportFactor.get();
             
             // Check if block has sufficient support
             if (support < requiredSupport) {
@@ -312,6 +426,41 @@ public class StructuralIntegrityManager {
             
             // Schedule update for surrounding blocks
             scheduleStructuralUpdate(level, pos, 2); // Smaller radius for cascade updates
+            
+            // Clear cache for this position
+            clearCachedSupport(level, pos);
+        }
+    }
+    
+    // Support value caching methods
+    private Double getCachedSupport(Level level, BlockPos pos) {
+        Map<BlockPos, Double> levelCache = supportCache.get(level);
+        if (levelCache != null) {
+            return levelCache.get(pos);
+        }
+        return null;
+    }
+    
+    private void cacheSupport(Level level, BlockPos pos, double support) {
+        supportCache.computeIfAbsent(level, k -> new HashMap<>());
+        Map<BlockPos, Double> levelCache = supportCache.get(level);
+        
+        // Manage cache size
+        if (levelCache.size() >= maxCacheSize) {
+            // Remove a random entry if cache is full
+            if (!levelCache.isEmpty()) {
+                BlockPos keyToRemove = levelCache.keySet().iterator().next();
+                levelCache.remove(keyToRemove);
+            }
+        }
+        
+        levelCache.put(pos, support);
+    }
+    
+    private void clearCachedSupport(Level level, BlockPos pos) {
+        Map<BlockPos, Double> levelCache = supportCache.get(level);
+        if (levelCache != null) {
+            levelCache.remove(pos);
         }
     }
     
