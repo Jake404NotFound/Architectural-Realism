@@ -79,11 +79,6 @@ neoForge {
             systemProperty 'forge.logging.console.level', 'debug'
             
             // Note: Working directory is set by default, no need to specify it explicitly
-            
-            // Force Java 17 for all run configurations
-            javaLauncher = javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(17)
-            }
         }
     }
     
