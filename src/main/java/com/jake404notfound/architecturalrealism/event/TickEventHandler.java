@@ -11,7 +11,7 @@ import net.neoforged.neoforge.event.TickEvent;
  * Handles game tick events for the Architectural Realism mod.
  * This is where we process structural integrity updates on a regular basis.
  */
-@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID)
+@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class TickEventHandler {
     
     /**

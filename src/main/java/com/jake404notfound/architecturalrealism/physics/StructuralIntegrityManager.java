@@ -3,9 +3,13 @@ package com.jake404notfound.architecturalrealism.physics;
 import com.jake404notfound.architecturalrealism.ArchitecturalRealism;
 import com.jake404notfound.architecturalrealism.config.ARConfig;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
@@ -13,7 +17,7 @@ import net.neoforged.fml.common.Mod;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID)
+@Mod.EventBusSubscriber(modid = ArchitecturalRealism.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class StructuralIntegrityManager {
     
     private final BlockPropertyManager blockPropertyManager;
@@ -22,11 +26,19 @@ public class StructuralIntegrityManager {
     private final Map<Level, Map<BlockPos, Double>> supportCache;
     private int maxCacheSize;
     
+    // Singleton instance
+    private static StructuralIntegrityManager instance;
+    
     public StructuralIntegrityManager() {
         this.blockPropertyManager = new BlockPropertyManager();
         this.updateQueue = new ConcurrentLinkedQueue<>();
         this.processedBlocks = new HashMap<>();
         this.supportCache = new HashMap<>();
+        instance = this;
+    }
+    
+    public static StructuralIntegrityManager getInstance() {
+        return instance;
     }
     
     public void initialize() {
@@ -41,15 +53,17 @@ public class StructuralIntegrityManager {
         
         // Skip in creative mode if configured to bypass
         if (ARConfig.COMMON.enableCreativeBypass.get() && event.getEntity() != null && 
-            event.getEntity().isCreative()) {
+            event.getEntity() instanceof Player player && player.isCreative()) {
             return;
         }
         
         ArchitecturalRealism.LOGGER.debug("Block placed at {}", event.getPos());
         
         // Schedule structural integrity check for the placed block and surrounding area
-        getInstance().scheduleStructuralUpdate(event.getLevel(), event.getPos(), 
-            ARConfig.COMMON.calculationRadius.get());
+        if (event.getLevel() instanceof Level level) {
+            getInstance().scheduleStructuralUpdate(level, event.getPos(), 
+                ARConfig.COMMON.calculationRadius.get());
+        }
     }
     
     @SubscribeEvent
@@ -65,8 +79,10 @@ public class StructuralIntegrityManager {
         ArchitecturalRealism.LOGGER.debug("Block broken at {}", event.getPos());
         
         // Schedule structural integrity check for the area around the broken block
-        getInstance().scheduleStructuralUpdate(event.getLevel(), event.getPos(), 
-            ARConfig.COMMON.calculationRadius.get());
+        if (event.getLevel() instanceof Level level) {
+            getInstance().scheduleStructuralUpdate(level, event.getPos(), 
+                ARConfig.COMMON.calculationRadius.get());
+        }
     }
     
     private void scheduleStructuralUpdate(Level level, BlockPos pos, int radius) {
@@ -235,9 +251,6 @@ public class StructuralIntegrityManager {
                     // Update support value
                     supportMap.put(neighbor.immutable(), transferredSupport);
                     
-                    // Cache the support value
-                    cacheSupport(level, neighbor.immutable(), transferredSupport);
-                    
                     // Add to queue for further propagation if not already processed
                     if (!processed.contains(neighbor)) {
                         queue.add(neighbor.immutable());
@@ -246,134 +259,79 @@ public class StructuralIntegrityManager {
                     }
                 }
             }
-            
-            // Check diagonal connections if enabled
-            if (ARConfig.COMMON.enableDiagonalConnections.get()) {
-                checkDiagonalConnections(level, current, currentSupport, currentDistance, 
-                                        center, radius, supportMap, queue, processed, 
-                                        distanceFromFoundation, maxSupportDistance);
-            }
         }
+        
+        // Cache support values for future use
+        cacheSupport(level, supportMap);
         
         return supportMap;
     }
     
-    private void checkDiagonalConnections(Level level, BlockPos current, double currentSupport, 
-                                         int currentDistance, BlockPos center, int radius,
-                                         Map<BlockPos, Double> supportMap, Queue<BlockPos> queue, 
-                                         Set<BlockPos> processed, Map<BlockPos, Integer> distanceFromFoundation,
-                                         int maxSupportDistance) {
-        // Check diagonal connections (e.g., corner blocks)
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    // Skip orthogonal directions (already handled) and center
-                    if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <= 1) continue;
-                    
-                    BlockPos diagonal = current.offset(dx, dy, dz);
-                    
-                    // Skip if outside calculation radius
-                    if (diagonal.distSqr(center) > radius * radius) continue;
-                    
-                    // Skip if air
-                    if (level.isEmptyBlock(diagonal)) continue;
-                    
-                    // Calculate diagonal support transfer with penalty
-                    double diagonalFactor = ARConfig.COMMON.diagonalSupportFactor.get();
-                    double transferredSupport = calculateDiagonalSupportTransfer(level, current, diagonal, 
-                                                                               currentSupport, diagonalFactor);
-                    
-                    // If this provides more support than the diagonal already has
-                    if (transferredSupport > supportMap.getOrDefault(diagonal, 0.0)) {
-                        // Update support value
-                        supportMap.put(diagonal.immutable(), transferredSupport);
-                        
-                        // Cache the support value
-                        cacheSupport(level, diagonal.immutable(), transferredSupport);
-                        
-                        // Add to queue for further propagation if not already processed and within distance limit
-                        if (!processed.contains(diagonal) && currentDistance + 1 < maxSupportDistance) {
-                            queue.add(diagonal.immutable());
-                            processed.add(diagonal.immutable());
-                            distanceFromFoundation.put(diagonal, currentDistance + 1);
-                        }
-                    }
-                }
-            }
+    private Double getCachedSupport(Level level, BlockPos pos) {
+        if (supportCache.containsKey(level)) {
+            return supportCache.get(level).get(pos);
         }
+        return null;
     }
     
-    private double calculateDiagonalSupportTransfer(Level level, BlockPos source, BlockPos target, 
-                                                  double sourceSupport, double diagonalFactor) {
-        BlockState sourceState = level.getBlockState(source);
-        BlockState targetState = level.getBlockState(target);
+    private void cacheSupport(Level level, Map<BlockPos, Double> supportMap) {
+        // Initialize cache for this level if needed
+        supportCache.computeIfAbsent(level, k -> new HashMap<>());
+        Map<BlockPos, Double> levelCache = supportCache.get(level);
         
-        // Get block properties
-        BlockProperties sourceProps = blockPropertyManager.getBlockProperties(sourceState.getBlock());
-        BlockProperties targetProps = blockPropertyManager.getBlockProperties(targetState.getBlock());
+        // Add new values to cache
+        for (Map.Entry<BlockPos, Double> entry : supportMap.entrySet()) {
+            levelCache.put(entry.getKey(), entry.getValue());
+        }
         
-        // For diagonal connections, use the minimum of tensile and shear strength
-        double transferFactor = Math.min(sourceProps.getTensileStrength(), sourceProps.getShearStrength()) / 100.0;
-        
-        // Apply diagonal penalty
-        transferFactor *= diagonalFactor;
-        
-        // Higher weight penalty for diagonal connections
-        double supportLoss = sourceProps.getWeight() * 1.5;
-        
-        // Calculate transferred support
-        double transferredSupport = sourceSupport * transferFactor - supportLoss;
-        
-        // Ensure support doesn't exceed the maximum the block can transfer
-        transferredSupport = Math.min(transferredSupport, sourceProps.getMaxLoad() * diagonalFactor);
-        
-        // Support can't be negative
-        return Math.max(0, transferredSupport);
+        // Trim cache if it gets too large
+        if (levelCache.size() > maxCacheSize) {
+            // Simple approach: just clear the cache when it gets too big
+            // A more sophisticated approach would be to use a LRU cache
+            levelCache.clear();
+        }
     }
     
     private double calculateSupportTransfer(Level level, BlockPos source, BlockPos target, double sourceSupport, Direction direction) {
+        // Get block properties
         BlockState sourceState = level.getBlockState(source);
         BlockState targetState = level.getBlockState(target);
         
-        // Get block properties
-        BlockProperties sourceProps = blockPropertyManager.getBlockProperties(sourceState.getBlock());
-        BlockProperties targetProps = blockPropertyManager.getBlockProperties(targetState.getBlock());
+        // Get support factors for the blocks
+        double sourceFactor = blockPropertyManager.getSupportFactor(sourceState.getBlock());
+        double targetFactor = blockPropertyManager.getSupportFactor(targetState.getBlock());
         
-        double transferFactor;
-        double supportLoss;
+        // Base support transfer is the minimum of the two factors
+        double transferFactor = Math.min(sourceFactor, targetFactor);
         
-        // Calculate support transfer based on direction
+        // Apply direction-specific modifiers
         if (direction == Direction.UP) {
-            // Vertical support upward uses compression strength
-            transferFactor = sourceProps.getCompressionStrength() / 100.0;
-            supportLoss = sourceProps.getWeight() * 0.5;
+            // Support from below is strongest
+            transferFactor *= ARConfig.COMMON.verticalSupportFactor.get();
         } else if (direction == Direction.DOWN) {
-            // Support doesn't propagate downward in the same way
-            // But we can allow some minimal support for hanging structures
+            // Support from above (hanging) is weaker
             if (ARConfig.COMMON.enableHangingSupport.get()) {
-                transferFactor = sourceProps.getTensileStrength() / 200.0; // Half of normal tensile strength
-                supportLoss = sourceProps.getWeight() * 2.0; // Double weight penalty
-                return Math.max(0, sourceSupport * transferFactor - supportLoss);
+                transferFactor *= ARConfig.COMMON.hangingSupportFactor.get();
+            } else {
+                return 0.0; // No hanging support if disabled
             }
-            return 0;
         } else {
-            // Horizontal support uses tensile strength
-            transferFactor = sourceProps.getTensileStrength() / 100.0;
-            supportLoss = sourceProps.getWeight() * 1.0;
+            // Horizontal support
+            transferFactor *= ARConfig.COMMON.horizontalSupportFactor.get();
         }
         
-        // Calculate transferred support
-        double transferredSupport = sourceSupport * transferFactor - supportLoss;
+        // Calculate final support value
+        double supportTransfer = sourceSupport * transferFactor;
         
-        // Ensure support doesn't exceed the maximum the block can transfer
-        transferredSupport = Math.min(transferredSupport, sourceProps.getMaxLoad());
+        // Apply distance decay
+        supportTransfer *= ARConfig.COMMON.supportDecayFactor.get();
         
-        // Support can't be negative
-        return Math.max(0, transferredSupport);
+        return supportTransfer;
     }
     
     private List<BlockPos> findUnstableBlocks(Level level, Map<BlockPos, Double> supportMap) {
         List<BlockPos> unstableBlocks = new ArrayList<>();
+        double stabilityThreshold = ARConfig.COMMON.stabilityThreshold.get();
         
         for (Map.Entry<BlockPos, Double> entry : supportMap.entrySet()) {
             BlockPos pos = entry.getKey();
@@ -382,119 +340,57 @@ public class StructuralIntegrityManager {
             // Skip air blocks
             if (level.isEmptyBlock(pos)) continue;
             
-            BlockState state = level.getBlockState(pos);
-            BlockProperties props = blockPropertyManager.getBlockProperties(state.getBlock());
-            
-            // Calculate required support based on block weight
-            double requiredSupport = props.getWeight() * ARConfig.COMMON.supportFactor.get();
-            
-            // Check if block has sufficient support
-            if (support < requiredSupport) {
-                unstableBlocks.add(pos.immutable());
+            // Check if block has enough support
+            if (support < stabilityThreshold) {
+                // Block is unstable
+                unstableBlocks.add(pos);
             }
         }
-        
-        // Sort unstable blocks by height (top to bottom) to simulate realistic collapse
-        unstableBlocks.sort((a, b) -> Integer.compare(b.getY(), a.getY()));
         
         return unstableBlocks;
     }
     
     private void handleCollapse(Level level, List<BlockPos> unstableBlocks) {
+        // Sort blocks by height (top to bottom) to simulate natural collapse
+        unstableBlocks.sort((a, b) -> Integer.compare(b.getY(), a.getY()));
+        
         for (BlockPos pos : unstableBlocks) {
-            // Skip if block has been removed already (by another collapse)
+            // Skip if block has been processed already (might have been destroyed by another falling block)
             if (level.isEmptyBlock(pos)) continue;
             
-            BlockState state = level.getBlockState(pos);
-            BlockProperties props = blockPropertyManager.getBlockProperties(state.getBlock());
+            BlockState blockState = level.getBlockState(pos);
             
-            // Determine if block should break or fall based on fragility
-            if (Math.random() < props.getFragility()) {
-                // Block breaks
-                level.destroyBlock(pos, true);
+            // Create falling block entity
+            if (ARConfig.COMMON.enableFallingBlocks.get()) {
+                try {
+                    // Use the appropriate constructor for FallingBlockEntity in 1.21.1
+                    FallingBlockEntity fallingBlock = FallingBlockEntity.fall(
+                        level, 
+                        pos, 
+                        blockState
+                    );
+                    
+                    // Remove the original block
+                    level.removeBlock(pos, false);
+                    
+                    // Add the falling block entity to the level
+                    level.addFreshEntity(fallingBlock);
+                    
+                    ArchitecturalRealism.LOGGER.debug("Block at {} collapsed and is now falling", pos);
+                } catch (Exception e) {
+                    ArchitecturalRealism.LOGGER.error("Error creating falling block at {}: {}", pos, e.getMessage());
+                    // Fallback: just destroy the block
+                    level.destroyBlock(pos, true);
+                }
             } else {
-                // Block falls
-                Block.dropResources(state, level, pos);
-                level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
-                
-                // Spawn falling block entity
-                net.minecraft.world.entity.item.FallingBlockEntity fallingBlock = 
-                    new net.minecraft.world.entity.item.FallingBlockEntity(
-                        level, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, state);
-                level.addFreshEntity(fallingBlock);
-            }
-            
-            // Schedule update for surrounding blocks
-            scheduleStructuralUpdate(level, pos, 2); // Smaller radius for cascade updates
-            
-            // Clear cache for this position
-            clearCachedSupport(level, pos);
-        }
-    }
-    
-    // Support value caching methods
-    private Double getCachedSupport(Level level, BlockPos pos) {
-        Map<BlockPos, Double> levelCache = supportCache.get(level);
-        if (levelCache != null) {
-            return levelCache.get(pos);
-        }
-        return null;
-    }
-    
-    private void cacheSupport(Level level, BlockPos pos, double support) {
-        supportCache.computeIfAbsent(level, k -> new HashMap<>());
-        Map<BlockPos, Double> levelCache = supportCache.get(level);
-        
-        // Manage cache size
-        if (levelCache.size() >= maxCacheSize) {
-            // Remove a random entry if cache is full
-            if (!levelCache.isEmpty()) {
-                BlockPos keyToRemove = levelCache.keySet().iterator().next();
-                levelCache.remove(keyToRemove);
+                // Just destroy the block if falling blocks are disabled
+                level.destroyBlock(pos, true);
+                ArchitecturalRealism.LOGGER.debug("Unstable block at {} was destroyed", pos);
             }
         }
-        
-        levelCache.put(pos, support);
     }
     
-    private void clearCachedSupport(Level level, BlockPos pos) {
-        Map<BlockPos, Double> levelCache = supportCache.get(level);
-        if (levelCache != null) {
-            levelCache.remove(pos);
-        }
-    }
-    
-    // Singleton instance for static event handlers
-    private static StructuralIntegrityManager instance;
-    
-    public static StructuralIntegrityManager getInstance() {
-        if (instance == null) {
-            instance = new StructuralIntegrityManager();
-        }
-        return instance;
-    }
-    
-    // Helper class for direction
-    public enum Direction {
-        UP, DOWN, NORTH, SOUTH, EAST, WEST;
-        
-        public BlockPos relative(BlockPos pos) {
-            return switch (this) {
-                case UP -> pos.above();
-                case DOWN -> pos.below();
-                case NORTH -> pos.north();
-                case SOUTH -> pos.south();
-                case EAST -> pos.east();
-                case WEST -> pos.west();
-            };
-        }
-        
-        public static Direction[] values() {
-            return new Direction[]{UP, DOWN, NORTH, SOUTH, EAST, WEST};
-        }
-    }
-    
-    // Helper class for structural update tasks
+    // Helper class to store structural update tasks
     private static class StructuralUpdateTask {
         final Level level;
         final BlockPos position;
