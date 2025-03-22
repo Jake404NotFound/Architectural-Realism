@@ -96,9 +96,7 @@ dependencies {
 
 // This block of code adds the ability to generate a mod_data.json file in the META-INF folder of the mod jar.
 // This file is used by the NeoForged installer to determine the mod's ID, version, name, and description.
-tasks.named('jar', Jar).configure {
-    finalizedBy 'reobfJar'
-}
+// Note: The reobfJar task reference has been removed as it's not part of NeoForge 1.0.21
 
 publishing {
     publications {
