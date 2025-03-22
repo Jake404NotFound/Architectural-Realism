@@ -31,29 +31,32 @@ neoForge {
             client()
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
+            workingDirectory project.file('run')
         }
         
         server {
             server()
             systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
             programArgument '--nogui'
+            workingDirectory project.file('run')
         }
         
         // This run config launches GameTestServer and runs all registered gametests, then exits.
         gameTestServer {
             type = "gameTestServer"
             systemProperty 'neoforge.enabledGameTestNamespaces', 'architecturalrealism'
+            workingDirectory project.file('run')
         }
         
         data {
             data()
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
             programArguments.addAll '--mod', 'architecturalrealism', '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+            workingDirectory project.file('run')
         }
         
         // applies to all the run configs above
         configureEach {
-            gameDirectory project.file('run')
             // Recommended logging data for a userdev environment
             // The markers can be added/remove as needed separated by commas.
             // "SCAN": For mods scan.
