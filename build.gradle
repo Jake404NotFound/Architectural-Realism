@@ -15,6 +15,20 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 println "Java: ${System.getProperty('java.version')}, JVM: ${System.getProperty('java.vm.version')} (${System.getProperty('java.vendor')}), Arch: ${System.getProperty('os.arch')}"
 
+// Force all tasks to use Java 17
+tasks.withType(JavaCompile).configureEach {
+    javaCompiler = javaToolchains.compilerFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+// Force the createMinecraftArtifacts task to use Java 17
+tasks.withType(JavaExec).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
 neoForge {
     // Specify the version of NeoForge to use
     version = project.neo_version
@@ -65,6 +79,11 @@ neoForge {
             systemProperty 'forge.logging.console.level', 'debug'
             
             // Note: Working directory is set by default, no need to specify it explicitly
+            
+            // Force Java 17 for all run configurations
+            javaLauncher = javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(17)
+            }
         }
     }
     
