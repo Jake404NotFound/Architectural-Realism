@@ -4,9 +4,9 @@ import com.jake404notfound.architecturalrealism.ArchitecturalRealism;
 import com.jake404notfound.architecturalrealism.physics.StructuralIntegrityManager;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.bus.api.EventBusSubscriber;
-import net.neoforged.neoforge.event.TickEvent.ServerTickEvent;
-import net.neoforged.neoforge.event.TickEvent.LevelTickEvent;
+import net.neoforged.fml.common.Mod.EventBusSubscriber;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /**
  * Handles game tick events for the Architectural Realism mod.
