@@ -106,6 +106,15 @@ repositories {
 
 dependencies {
     // No need to specify Minecraft dependency here, it's handled by the plugin
+    
+    // Add test dependencies for GameTest framework
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    
+    // Make Minecraft classes available to test classpath
+    testImplementation sourceSets.main.output
+    testImplementation configurations.compileClasspath
+    testImplementation configurations.runtimeClasspath
 }
 
 // This block of code adds the ability to generate a mod_data.json file in the META-INF folder of the mod jar.
