@@ -8,7 +8,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.gametest.GameTest;
+import net.minecraft.gametest.framework.GameTest;
+import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -31,7 +32,7 @@ public class StructuralIntegrityTests {
      * Tests that foundation blocks are correctly identified.
      */
     @GameTest(template = "empty")
-    public void testFoundationIdentification(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testFoundationIdentification(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
@@ -72,7 +73,7 @@ public class StructuralIntegrityTests {
      * Tests that support is correctly calculated and propagated.
      */
     @GameTest(template = "empty")
-    public void testSupportPropagation(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testSupportPropagation(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
@@ -128,7 +129,7 @@ public class StructuralIntegrityTests {
      * Tests that diagonal support is correctly calculated.
      */
     @GameTest(template = "empty")
-    public void testDiagonalSupport(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testDiagonalSupport(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
@@ -173,7 +174,7 @@ public class StructuralIntegrityTests {
      * Tests that hanging support is correctly calculated.
      */
     @GameTest(template = "empty")
-    public void testHangingSupport(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testHangingSupport(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
@@ -210,7 +211,7 @@ public class StructuralIntegrityTests {
      * Tests that unstable blocks are correctly identified.
      */
     @GameTest(template = "empty")
-    public void testUnstableBlockIdentification(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testUnstableBlockIdentification(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
@@ -275,7 +276,7 @@ public class StructuralIntegrityTests {
      * Tests that support caching works correctly.
      */
     @GameTest(template = "empty")
-    public void testSupportCaching(net.neoforged.neoforge.gametest.GameTestHelper helper) {
+    public void testSupportCaching(GameTestHelper helper) {
         // Create a test environment
         Level level = helper.getLevel();
         
