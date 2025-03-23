@@ -55,6 +55,19 @@ public class BlockPropertyManager {
     }
     
     /**
+     * Gets the support factor for a specific block.
+     * This factor determines how well the block can transfer support to adjacent blocks.
+     * 
+     * @param block The block to get the support factor for
+     * @return The support factor value (higher is better at transferring support)
+     */
+    public double getSupportFactor(Block block) {
+        BlockProperties props = getBlockProperties(block);
+        // Calculate support factor based on compression and tensile strength
+        return (props.getCompressionStrength() + props.getTensileStrength()) / 20.0;
+    }
+    
+    /**
      * Initialize default properties for unknown blocks
      */
     private void initializeDefaultProperties() {

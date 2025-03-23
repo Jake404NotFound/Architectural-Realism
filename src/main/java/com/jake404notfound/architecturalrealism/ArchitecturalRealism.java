@@ -3,7 +3,7 @@ package com.jake404notfound.architecturalrealism;
 import com.jake404notfound.architecturalrealism.config.ARConfig;
 import com.jake404notfound.architecturalrealism.physics.StructuralIntegrityManager;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModLoadingContext;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -17,11 +17,11 @@ public class ArchitecturalRealism {
     
     private StructuralIntegrityManager structuralIntegrityManager;
 
-    public ArchitecturalRealism(IEventBus modEventBus) {
+    public ArchitecturalRealism(IEventBus modEventBus, ModContainer modContainer) {
         LOGGER.info("Initializing Architectural Realism mod");
         
         // Register mod configuration
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ARConfig.COMMON_SPEC);
+        modContainer.registerConfig(ModConfig.Type.COMMON, ARConfig.COMMON_SPEC);
         
         // Register setup method
         modEventBus.addListener(this::setup);
