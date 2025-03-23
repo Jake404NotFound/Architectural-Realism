@@ -112,9 +112,7 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
     
     // Make Minecraft classes available to test classpath
-    testImplementation sourceSets.main.output
-    testImplementation configurations.compileClasspath
-    testImplementation configurations.runtimeClasspath
+    testImplementation project(':')
 }
 
 // This block of code adds the ability to generate a mod_data.json file in the META-INF folder of the mod jar.
