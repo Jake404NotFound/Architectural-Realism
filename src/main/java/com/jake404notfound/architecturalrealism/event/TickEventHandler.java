@@ -4,7 +4,7 @@ import com.jake404notfound.architecturalrealism.ArchitecturalRealism;
 import com.jake404notfound.architecturalrealism.physics.StructuralIntegrityManager;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod.EventBusSubscriber;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
@@ -20,12 +20,9 @@ public class TickEventHandler {
      * This ensures that our physics calculations are spread out over time.
      */
     @SubscribeEvent
-    public static void onServerTick(ServerTickEvent event) {
-        // Only process on the end phase to ensure all other tick operations are complete
-        if (event.getPhase() == ServerTickEvent.Phase.END) {
-            // Process pending structural updates
-            StructuralIntegrityManager.getInstance().processPendingUpdates();
-        }
+    public static void onServerTick(ServerTickEvent.Post event) {
+        // Process pending structural updates
+        StructuralIntegrityManager.getInstance().processPendingUpdates();
     }
     
     /**
@@ -33,9 +30,8 @@ public class TickEventHandler {
      * This could be used for level-specific physics calculations in the future.
      */
     @SubscribeEvent
-    public static void onLevelTick(LevelTickEvent event) {
-        // Only process on server side and in the end phase
-        if (event.getLevel() instanceof ServerLevel && event.getPhase() == LevelTickEvent.Phase.END) {
+    public static void onLevelTick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel) {
             // Currently no level-specific processing needed
             // This hook is here for future expansion
         }
